@@ -46,7 +46,7 @@ class ConsumerAgent(core.Agent):
             max_score_producer_name = "None producer avaliable."
 
         print(f"Choosen Producer: {max_score_producer_name}")
-        return max_score_producer_name
+        return max_score_producer_name  
 
     def save(self) -> Tuple:
         return (self.uid, self.budget)
@@ -101,9 +101,9 @@ class ProducerAgent(core.Agent):
             self.trust_level = min(self.trust_level*(1 + self.alpha), 1)  
         self.print_status()
 
-    def set_alpha_beta(gammas=[]):
-        self.alpha = gammas[0]*significance + gammas[1]*trend
-        self.beta = gammas[2]*significance + gammas[3]*trend
+    def set_alpha_beta(self, gammas=[]):
+        self.alpha = gammas[0]*self.significance + gammas[1]*self.trend
+        self.beta = gammas[2]*self.significance + gammas[3]*self.trend
     
     def isOperationFailed(self):
         """
@@ -119,10 +119,42 @@ class ProducerAgent(core.Agent):
         print(f"{self.name}{space_fmt}| TRUST LEVEL: {self.trust_level} - CAPACITY: {self.capacity}")
 
     def save(self) -> Tuple:
-        return (self.uid, self.trust_level)
+        return (self.uid, self.name, self.trust_level, self.unit_cost, self.capacity, self.energy_type, self.failure_prob)
 
 
-class Model:
+producer_cache = {}  
+
+def restore_producer(producer_data: Tuple):    
+    """
+    Args:
+        producer_data: tuple containing the data returned by producer.save.
+    """
+    # uid is a 3 element tuple: 0 is id, 1 is type, 2 is rank
+    uid = producer_data[0] 
+
+    if uid in producer_cache:    
+        producer = producer_cache[uid]
+    else:    
+        producer = ProducerAgent(
+                                    uid[0], uid[2], 
+                                    producer_data[1],
+                                    producer_data[2],
+                                    producer_data[3],
+                                    producer_data[4],
+                                    producer_data[5],
+                                    producer_data[6]
+                                )
+        producer_cache[uid] = producer
+
+    producer.name = producer_data[1]    
+    producer.trust_level = producer_data[2]    
+    producer.unit_cost = producer_data[3]    
+    producer.capacity = producer_data[4]  
+    
+    return producer
+
+producers = []
+class Model:    
     def __init__(self, comm: MPI.Intracomm):
         self.runner = schedule.init_schedule_runner(comm)
         self.runner.schedule_repeating_event(1, 1, self.handle_agent)
@@ -143,12 +175,13 @@ class Model:
             p3 = ProducerAgent(333, rank, "Hidroelétrica", 0.9, 17, 1700, 3, 0.1)
             self.context.add(p3)
 
-    def handle_agent(self):
-        producers = []
-    
+    def handle_agent(self):    
+        self.context.synchronize(restore_producer) 
+
         for agent in self.context.agents():
             if agent.type == 0:
-                agent.make_decision(producers)
+                agent.make_decision(producer_cache.values())
+
 
 def main():
     comm = MPI.COMM_WORLD
