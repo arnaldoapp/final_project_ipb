@@ -5,8 +5,6 @@ from mpi4py import MPI
 
 from repast4py import core, random, space, schedule, logging, parameters
 from repast4py import context as ctx
-import repast4py
-from repast4py.space import DiscretePoint as dpt
 
 class ConsumerAgent(core.Agent):
     TYPE=0
@@ -149,6 +147,8 @@ def restore_producer(producer_data: Tuple):
     producer.trust_level = producer_data[2]    
     producer.unit_cost = producer_data[3]    
     producer.capacity = producer_data[4]  
+    producer.energy_type = producer_data[5]  
+    producer.failure_prob = producer_data[6]  
     
     return producer
 
@@ -174,7 +174,7 @@ class Model:
             agent_c1 = ConsumerAgent(123, rank, "Arnaldo", 5000, 9)
             self.context.add(agent_c1)
         elif rank == 1:
-            rng = repast4py.random.default_rng
+            rng = random.default_rng
             producers = params['producers_data']
 
             for producer in producers:
@@ -198,10 +198,9 @@ class Model:
     def handle_agent(self):    
         self.context.synchronize(restore_producer)
 
-        print(list(producer_cache.values()))
-
         for agent in self.context.agents():
             if agent.type == 0:
+                print(list(producer_cache.values()))
                 agent.make_decision(producer_cache.values())
 
 

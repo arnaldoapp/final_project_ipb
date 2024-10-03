@@ -1,5 +1,5 @@
 random.seed: 42
-stop.at: 10
+stop.at: 20
 world.width: 10
 world.height: 10
 producers_data: [
