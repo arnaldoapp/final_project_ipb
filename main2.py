@@ -1,10 +1,13 @@
+from typing import Dict, Tuple
+from mpi4py import MPI
+from dataclasses import dataclass
+
+from repast4py import core, random, space, schedule, logging, parameters
+from repast4py import context as ctx
+import repast4py
+from repast4py.space import DiscretePoint as dpt
 import random
 
-from mpi4py import MPI
-from typing import Tuple
-
-from repast4py import core, random, space, schedule
-from repast4py import context as ctx
 
 class ConsumerAgent(core.Agent):
     TYPE=0
@@ -127,7 +130,7 @@ def restore_producer(producer_data: Tuple):
         producer_data: tuple containing the data returned by producer.save.
     """
     # uid is a 3 element tuple: 0 is id, 1 is type, 2 is rank
-    uid = producer_data[0] 
+    uid = producer_data[0]
 
     if uid in producer_cache:    
         producer = producer_cache[uid]
@@ -150,47 +153,81 @@ def restore_producer(producer_data: Tuple):
     
     return producer
 
-class Model:    
-    def __init__(self, comm: MPI.Intracomm):
-        self.runner = schedule.init_schedule_runner(comm)
-        self.runner.schedule_repeating_event(1, 1, self.handle_agent)
-        self.runner.schedule_stop(20)
+class Model:
+    """
+    The Model class encapsulates the simulation, and is
+    responsible for initialization (scheduling events, creating agents,
+    and the grid the agents inhabit), and the overall iterating
+    behavior of the model.
 
-        # create the context to hold the agents and manage cross process synchronization
+    Args:
+        comm: the mpi communicator over which the model is distributed.
+        params: the simulation input parameters
+    """
+
+    def __init__(self, comm: MPI.Intracomm, params: Dict):
+        # create the schedule
+        self.runner = schedule.init_schedule_runner(comm)
+        self.runner.schedule_repeating_event(1, 1, self.step)
+        self.runner.schedule_stop(params['stop.at'])
+
+        # create the context to hold the agents and manage cross process
+        # synchronization
         self.context = ctx.SharedContext(comm)
+
+        # create a bounding box equal to the size of the entire global world grid
+        box = space.BoundingBox(0, params['world.width'], 0, params['world.height'], 0, 0)
+        # create a SharedGrid of 'box' size with sticky borders that allows multiple agents
+        # in each grid location.
+        self.grid = space.SharedGrid(name='grid', bounds=box, borders=space.BorderType.Sticky,
+                                     occupancy=space.OccupancyType.Multiple, buffer_size=2, comm=comm)
+        self.context.add_projection(self.grid)
 
         rank = comm.Get_rank()
         if rank == 0:
-            agent_c1 = ConsumerAgent(123, rank, "Genivaldo", 5000, 9)
+            agent_c1 = ConsumerAgent(123, rank, "Arnaldo", 5000, 9)
             self.context.add(agent_c1)
         elif rank == 1:
-            p1 = ProducerAgent(111, rank, "Eólica", 0.8, 12, 1200, 1, 0.2)
-            self.context.add(p1)
-            p2 = ProducerAgent(222, rank, "Solar", 0.75, 6, 600, 2, 0.15)
-            self.context.add(p2)
-            p3 = ProducerAgent(333, rank, "Hidroelétrica", 0.9, 17, 1700, 3, 0.1)
-            self.context.add(p3)
+            rng = repast4py.random.default_rng
+            producers = params['producers_data']
 
-    def handle_agent(self):    
-        self.context.synchronize(restore_producer) 
+            for producer in producers:
+                # get a random x,y location in the grid
+                pt = self.grid.get_random_local_pt(rng)
+                p = ProducerAgent(111, rank, "Eólica", 0.8, 12, 1200, 1, 0.2)
+                # p = ProducerAgent(
+                #     producer["id"], 
+                #     rank, 
+                #     producer["name"], 
+                #     producer["initial_trust_level"], 
+                #     producer["unit_cost"], 
+                #     producer["initial_capacity"], 
+                #     producer["energy_type"], 
+                #     producer["failure_prob"]
+                # )
+                self.context.add(p)
+                self.grid.move(p, pt)
 
-        global producer_cache
-        print(producer_cache)
+    def step(self):
+        self.context.synchronize(restore_producer)
+
+        print(producer_cache.values())
 
         for agent in self.context.agents():
             if agent.type == 0:
                 agent.make_decision(producer_cache.values())
 
+    def start(self):
+        self.runner.execute()
 
-def main():
-    comm = MPI.COMM_WORLD
-    # id = comm.Get_rank()                    #number of the process running the code
-    # numProcesses = comm.Get_size()          #total number of processes running
-    # myHostName = MPI.Get_processor_name()   #machine name running the code
 
-    model = Model(comm)
-    model.runner.execute()
+def run(params: Dict):
+    model = Model(MPI.COMM_WORLD, params)
+    model.start()
 
-main()
 
-# mpirun -n 2 python3 main.py
+if __name__ == "__main__":
+    parser = parameters.create_args_parser()
+    args = parser.parse_args()
+    params = parameters.init_params(args.parameters_file, args.parameters)
+    run(params)
