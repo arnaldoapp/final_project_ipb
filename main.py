@@ -1,10 +1,13 @@
-import random
+import random as rd
 
+from typing import Dict, Tuple
 from mpi4py import MPI
-from typing import Tuple
+from dataclasses import dataclass
 
-from repast4py import core, random, space, schedule
+from repast4py import core, random, space, schedule, logging, parameters
 from repast4py import context as ctx
+import repast4py
+from repast4py.space import DiscretePoint as dpt
 
 class ConsumerAgent(core.Agent):
     TYPE=0
@@ -107,7 +110,7 @@ class ProducerAgent(core.Agent):
         """
             Function: decide if the operation is failed or not
         """
-        if random.random() < self.failure_prob:
+        if rd.random() < self.failure_prob:
             return True
         else:
             return False
@@ -151,7 +154,7 @@ def restore_producer(producer_data: Tuple):
     return producer
 
 class Model:    
-    def __init__(self, comm: MPI.Intracomm):
+    def __init__(self, comm: MPI.Intracomm, params: Dict):
         self.runner = schedule.init_schedule_runner(comm)
         self.runner.schedule_repeating_event(1, 1, self.handle_agent)
         self.runner.schedule_stop(20)
@@ -159,23 +162,44 @@ class Model:
         # create the context to hold the agents and manage cross process synchronization
         self.context = ctx.SharedContext(comm)
 
+        # create a bounding box equal to the size of the entire global world grid
+        box = space.BoundingBox(0, params['world.width'], 0, params['world.height'], 0, 0)
+        # create a SharedGrid of 'box' size with sticky borders that allows multiple agents
+        # in each grid location.
+        self.grid = space.SharedGrid(name='grid', bounds=box, borders=space.BorderType.Sticky,
+                                     occupancy=space.OccupancyType.Multiple, buffer_size=2, comm=comm)
+        self.context.add_projection(self.grid)
+
         rank = comm.Get_rank()
         if rank == 0:
-            agent_c1 = ConsumerAgent(123, rank, "Genivaldo", 5000, 9)
+            agent_c1 = ConsumerAgent(123, rank, "Arnaldo", 5000, 9)
             self.context.add(agent_c1)
         elif rank == 1:
-            p1 = ProducerAgent(111, rank, "Eólica", 0.8, 12, 1200, 1, 0.2)
-            self.context.add(p1)
-            p2 = ProducerAgent(222, rank, "Solar", 0.75, 6, 600, 2, 0.15)
-            self.context.add(p2)
-            p3 = ProducerAgent(333, rank, "Hidroelétrica", 0.9, 17, 1700, 3, 0.1)
-            self.context.add(p3)
+            rng = repast4py.random.default_rng
+            producers = params['producers_data']
+
+            for producer in producers:
+                # get a random x,y location in the grid
+                pt = self.grid.get_random_local_pt(rng)
+                # Instance
+                p = ProducerAgent(111, rank, "Eólica", 0.8, 12, 1200, 1, 0.2)
+                # p = ProducerAgent(
+                #     producer["id"], 
+                #     rank, 
+                #     producer["name"], 
+                #     producer["initial_trust_level"], 
+                #     producer["unit_cost"], 
+                #     producer["initial_capacity"], 
+                #     producer["energy_type"], 
+                #     producer["failure_prob"]
+                # )
+                self.context.add(p)
+                self.grid.move(p, pt)
 
     def handle_agent(self):    
-        self.context.synchronize(restore_producer) 
+        self.context.synchronize(restore_producer)
 
-        global producer_cache
-        print(producer_cache)
+        print(producer_cache.values())
 
         for agent in self.context.agents():
             if agent.type == 0:
@@ -187,10 +211,18 @@ def main():
     # id = comm.Get_rank()                    #number of the process running the code
     # numProcesses = comm.Get_size()          #total number of processes running
     # myHostName = MPI.Get_processor_name()   #machine name running the code
+    
+    parser = parameters.create_args_parser()
+    args = parser.parse_args()
+    params = parameters.init_params(args.parameters_file, args.parameters)
 
-    model = Model(comm)
+    # Run Model
+    # ---
+    # Instance
+    model = Model(comm, params)
+    # Start Model
     model.runner.execute()
 
 main()
 
-# mpirun -n 2 python3 main.py
+# mpirun -n 2 python3 main.py conf.yaml
