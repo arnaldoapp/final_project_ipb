@@ -2,7 +2,6 @@ import random as rd
 
 from typing import Dict, Tuple
 from mpi4py import MPI
-from dataclasses import dataclass
 
 from repast4py import core, random, space, schedule, logging, parameters
 from repast4py import context as ctx
@@ -199,7 +198,7 @@ class Model:
     def handle_agent(self):    
         self.context.synchronize(restore_producer)
 
-        print(producer_cache.values())
+        print(list(producer_cache.values()))
 
         for agent in self.context.agents():
             if agent.type == 0:
