@@ -133,7 +133,7 @@ def restore_producer(producer_data: Tuple):
         producer = producer_cache[uid]
     else:    
         producer = ProducerAgent(
-                                    uid[0], uid[2], 
+                                    uid[0], uid[2],
                                     producer_data[1],
                                     producer_data[2],
                                     producer_data[3],
@@ -155,7 +155,7 @@ def restore_producer(producer_data: Tuple):
 class Model:    
     def __init__(self, comm: MPI.Intracomm, params: Dict):
         self.runner = schedule.init_schedule_runner(comm)
-        self.runner.schedule_repeating_event(1, 1, self.handle_agent)
+        self.runner.schedule_repeating_event(1, 1, self.step)
         self.runner.schedule_stop(20)
 
         # create the context to hold the agents and manage cross process synchronization
@@ -181,27 +181,31 @@ class Model:
                 # get a random x,y location in the grid
                 pt = self.grid.get_random_local_pt(rng)
                 # Instance
-                p = ProducerAgent(111, rank, "Eólica", 0.8, 12, 1200, 1, 0.2)
-                # p = ProducerAgent(
-                #     producer["id"], 
-                #     rank, 
-                #     producer["name"], 
-                #     producer["initial_trust_level"], 
-                #     producer["unit_cost"], 
-                #     producer["initial_capacity"], 
-                #     producer["energy_type"], 
-                #     producer["failure_prob"]
-                # )
+                # p = ProducerAgent(111, rank, "Eólica", 0.8, 12, 1200, 1, 0.2)
+                p = ProducerAgent(
+                    producer["id"], # the problem could be there
+                    rank, 
+                    producer["name"], 
+                    producer["initial_trust_level"], 
+                    producer["unit_cost"], 
+                    producer["initial_capacity"], 
+                    producer["energy_type"], 
+                    producer["failure_prob"]
+                )
                 self.context.add(p)
                 self.grid.move(p, pt)
 
-    def handle_agent(self):    
+    def step(self):    
         self.context.synchronize(restore_producer)
 
-        for agent in self.context.agents():
-            if agent.type == 0:
-                print(list(producer_cache.values()))
-                agent.make_decision(producer_cache.values())
+        print([p.name for p in producer_cache.values()])
+
+        # for agent in self.context.agents():
+        #     if agent.type == 0:
+        #         agent.make_decision(producer_cache.values())
+
+    def start(self):
+        self.runner.execute()
 
 
 def main():
@@ -219,7 +223,7 @@ def main():
     # Instance
     model = Model(comm, params)
     # Start Model
-    model.runner.execute()
+    model.start()
 
 main()
 
