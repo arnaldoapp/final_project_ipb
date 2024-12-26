@@ -1,3 +1,4 @@
+from random import random as rd
 from typing import Dict, Tuple
 from mpi4py import MPI
 
@@ -12,6 +13,7 @@ class ConsumerAgent(core.Agent):
         self.name = name
         self.budget = budget
         self.usage = initial_usage
+        self.producers = {}
 
     def save(self) -> Tuple:
         return (self.uid, self.name, self.budget, self.usage)
@@ -20,9 +22,57 @@ class ConsumerAgent(core.Agent):
         """
             Choose "Producer" based on price (unit_cost) and trust.
         """
-        print("Making Decision...", producers)
-    
+        producer_scores = {}
+        best_producer = None
+        
+        for prod in producers:
+            if prod not in self.producers.keys():
+                self.producers[prod] = ProducerAgent(
+                                            producers[prod].uid[0],
+                                            producers[prod].uid[2],
+                                            producers[prod].name,
+                                            producers[prod].unit_cost,
+                                            producers[prod].capacity,
+                                        )
+            else:
+                self.producers[prod].capacity = producers[prod].capacity
+                self.producers[prod].unit_cost = producers[prod].unit_cost
 
+        # Execute Decision
+        for prod in self.producers.values():
+            # Adjust decision based on trust level
+            if prod.trust_level >= 0.5:
+                cost = self.calculate_cost(prod.unit_cost)
+                # If trust level is high or medium, make decision as usual
+                if cost <= self.budget and self.usage <= prod.capacity:
+                    producer_scores[prod.uid] = prod.get_score()
+                else:
+                    """Reduce Usage""" 
+            else:
+                # If trust level is low, reduce usage regardless of cost
+                """Reduce Usage"""
+
+        if(producer_scores):
+            uid = max(producer_scores, key=producer_scores.get)
+            best_producer = self.producers[uid]
+
+        return best_producer, self
+    
+    def update_trust_level(self, uid, positive=True):
+        curr_producer = self.producers[uid]
+        trust_level = curr_producer.trust_level
+        alpha = curr_producer.alpha
+        beta = curr_producer.beta
+
+        if positive:
+            curr_producer.trust_level = min(trust_level*(1 + alpha), 1)
+        else:
+            curr_producer.trust_level = max(trust_level*(1 - beta), 0)
+
+    def calculate_cost(self, unit_cost):
+        return self.usage * unit_cost
+    
+    
 class ProducerAgent(core.Agent):
     TYPE=1
 
@@ -31,6 +81,11 @@ class ProducerAgent(core.Agent):
         self.name = name
         self.unit_cost = unit_cost
         self.capacity = initial_capacity
+        # for consumer local accounting
+        self.trust_level = 0.5
+        self.alpha = 0.01
+        self.beta = 0.08
+        self.failure_prob = 0.15
     
     def save(self) -> Tuple:
         return (self.uid, self.name, self.unit_cost, self.capacity)
@@ -43,11 +98,17 @@ class ProducerAgent(core.Agent):
             for simulate the failed operation, besides the low capacity 
             scenario.
         """
-        if amount <= self.capacity:
+        failed = rd() < self.failure_prob # failure simulation
+
+        if amount <= self.capacity and not failed:
             self.capacity -= amount
-            return True
+            return "Success"
         else:
-            return False
+            return "Failed"
+    
+    def get_score(self):
+        return self.unit_cost*(1+(10**(-3))-self.trust_level)
+
 
 producer_cache = {}  
 
@@ -91,7 +152,7 @@ class Model:
 
         rank = comm.Get_rank()
         if rank == 0:
-            agent_c1 = ConsumerAgent(123, rank, "Arnaldo", 5000, 9)
+            agent_c1 = ConsumerAgent(123, rank, "Arnaldo", 90000, 5000)
             self.context.add(agent_c1)
         elif rank == 1:
             rng = random.default_rng
@@ -113,17 +174,31 @@ class Model:
 
     def step(self):    
         self.context.synchronize(restore_producer)
-        producers = [(p.name, p.unit_cost, p.capacity) for p in producer_cache.values()]
+        # producers = [(p.name, p.unit_cost, p.capacity) for p in producer_cache.values()]
+        choosen = None
+        consumer = None
 
         for agent in self.context.agents():
             if agent.type == 0:
-                agent.make_decision(producers)
+                choosen, consumer = agent.make_decision(producer_cache)
+
+        if choosen:
+            # require slots electricity, success depends on avaliable capacity
+            choosen_cache = producer_cache[choosen.uid]
+            status = choosen_cache.produce_electricity(consumer.usage)
+
+            #TODO: define some criteria on update trust level
+            consumer.update_trust_level(choosen.uid, positive="Success" in status)
+
+            space_fmt = " "*(20 - len(choosen_cache.name))
+            print(f"[{status}] Choosen Producer: {choosen_cache.name}{space_fmt}| Capacity: {choosen_cache.capacity}", end=" - ")
+            print(f"Local Trust Level {choosen.trust_level}")
 
     def start(self):
         self.runner.execute()
 
 
-def main():
+def run():
     comm = MPI.COMM_WORLD
     # id = comm.Get_rank()                    #number of the process running the code
     # numProcesses = comm.Get_size()          #total number of processes running
@@ -140,6 +215,7 @@ def main():
     # Start Model
     model.start()
 
-main()
+if __name__ == "__main__":
+    run()
 
 # mpirun -n 3 python3 main.py conf.yaml
