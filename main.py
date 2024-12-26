@@ -18,10 +18,12 @@ class ConsumerAgent(core.Agent):
     def save(self) -> Tuple:
         return (self.uid, self.name, self.budget, self.usage)
     
-    def make_decision(self, producers=[]):
+    def make_decision(self, producers=[], total_budget=0, total_usage=0):
         """
             Choose "Producer" based on price (unit_cost) and trust.
         """
+        total_usage = total_usage if total_usage else self.usage
+        total_budget = total_budget if total_budget else self.budget
         producer_scores = {}
         best_producer = None
         
@@ -42,9 +44,9 @@ class ConsumerAgent(core.Agent):
         for prod in self.producers.values():
             # Adjust decision based on trust level
             if prod.trust_level >= 0.5:
-                cost = self.calculate_cost(prod.unit_cost)
+                cost = self.calculate_cost(prod.unit_cost, total_usage)
                 # If trust level is high or medium, make decision as usual
-                if cost <= self.budget and self.usage <= prod.capacity:
+                if cost <= total_budget and total_usage <= prod.capacity:
                     producer_scores[prod.uid] = prod.get_score()
                 else:
                     """Reduce Usage""" 
@@ -53,7 +55,7 @@ class ConsumerAgent(core.Agent):
                 """Reduce Usage"""
 
         if(producer_scores):
-            uid = max(producer_scores, key=producer_scores.get)
+            uid = min(producer_scores, key=producer_scores.get)
             best_producer = self.producers[uid]
 
         return best_producer, self
@@ -69,8 +71,8 @@ class ConsumerAgent(core.Agent):
         else:
             curr_producer.trust_level = max(trust_level*(1 - beta), 0)
 
-    def calculate_cost(self, unit_cost):
-        return self.usage * unit_cost
+    def calculate_cost(self, unit_cost, usage):
+        return usage * unit_cost
     
     
 class ProducerAgent(core.Agent):
@@ -151,11 +153,25 @@ class Model:
         self.context.add_projection(self.grid)
 
         rank = comm.Get_rank()
+        rng = random.default_rng
+
         if rank == 0:
-            agent_c1 = ConsumerAgent(123, rank, "Arnaldo", 90000, 5000)
-            self.context.add(agent_c1)
+            consumers = params['consumers_data']
+
+            for consumer in consumers:
+                # get a random x,y location in the grid
+                pt = self.grid.get_random_local_pt(rng)
+                # Instance
+                c = ConsumerAgent(
+                    consumer["id"],
+                    rank,
+                    consumer["name"], 
+                    consumer["budget"], 
+                    consumer["usage"], 
+                )
+                self.context.add(c)
+                self.grid.move(c, pt)
         elif rank == 1:
-            rng = random.default_rng
             producers = params['producers_data']
 
             for producer in producers:
@@ -174,25 +190,42 @@ class Model:
 
     def step(self):    
         self.context.synchronize(restore_producer)
-        # producers = [(p.name, p.unit_cost, p.capacity) for p in producer_cache.values()]
-        choosen = None
-        consumer = None
+        best_producers = []
+        curr_consumers = []
+        total_usage = 0
+        total_budget = 0
 
         for agent in self.context.agents():
             if agent.type == 0:
-                choosen, consumer = agent.make_decision(producer_cache)
+                total_budget += agent.budget
+                total_usage += agent.usage
 
-        if choosen:
-            # require slots electricity, success depends on avaliable capacity
-            choosen_cache = producer_cache[choosen.uid]
-            status = choosen_cache.produce_electricity(consumer.usage)
+        for agent in self.context.agents():
+            if agent.type == 0:
+                producer, consumer = agent.make_decision(producer_cache, total_budget, total_usage)
+                best_producers.append(producer)
+                curr_consumers.append(consumer)
+                # print(producer.uid, consumer.name)
 
-            #TODO: define some criteria on update trust level
-            consumer.update_trust_level(choosen.uid, positive="Success" in status)
+        if best_producers:
+            keys = list(best.uid if best else None for best in best_producers)
+            unique_elements = list(set(keys))
+            unique_elements = unique_elements.remove(None) if None in unique_elements else unique_elements
+            choosen_uid = max(unique_elements, key=lambda x: keys.count(x)) if unique_elements else None
+            best_producer = best_producers[keys.index(choosen_uid)]
 
-            space_fmt = " "*(20 - len(choosen_cache.name))
-            print(f"[{status}] Choosen Producer: {choosen_cache.name}{space_fmt}| Capacity: {choosen_cache.capacity}", end=" - ")
-            print(f"Local Trust Level {choosen.trust_level}")
+            if choosen_uid:
+                # require slots electricity, success depends on avaliable capacity
+                choosen_cache = producer_cache[choosen_uid]
+                status = choosen_cache.produce_electricity(total_usage)
+
+                # #TODO: define some criteria on update trust level
+                for consumer in curr_consumers:
+                    consumer.update_trust_level(choosen_uid, positive="Success" in status)
+
+                space_fmt = " "*(20 - len(choosen_cache.name))
+                print(f"[{status}] Choosen Producer: {choosen_cache.name}{space_fmt}| Capacity: {choosen_cache.capacity}", end=" - ")
+                print(f"Local Trust Level {best_producer.trust_level}")
 
     def start(self):
         self.runner.execute()

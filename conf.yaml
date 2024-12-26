@@ -5,5 +5,10 @@ world.height: 10
 producers_data: [
   {"id": 111, "name": "Eólica", "initial_trust_level": 0.8, "initial_capacity": 12000, "unit_cost": 12, "energy_type": 1, "failure_prob": 0.2},
   {"id": 222, "name": "Solar", "initial_trust_level": 0.75, "initial_capacity": 6000, "unit_cost": 6, "energy_type": 2, "failure_prob": 0.15},
-  {"id": 333, "name": "Hidroelétrica", "initial_trust_level": 0.9, "initial_capacity": 17000, "unit_cost": 17, "energy_type": 3, "failure_prob": 0.1},
+  {"id": 333, "name": "Hidroelétrica", "initial_trust_level": 0.9, "initial_capacity": 4600, "unit_cost": 17, "energy_type": 3, "failure_prob": 0.1},
+]
+consumers_data: [
+  {"id": 11, "name": "Arnaldo", "budget": 90000, "usage": 1000},
+  {"id": 22, "name": "Mary", "budget": 100000, "usage": 500},
+  {"id": 33, "name": "João", "budget": 100000, "usage": 800},
 ]
