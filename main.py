@@ -71,6 +71,8 @@ class ConsumerAgent(core.Agent):
         else:
             curr_producer.trust_level = max(trust_level*(1 - beta), 0)
 
+        return curr_producer.trust_level
+
     def calculate_cost(self, unit_cost, usage):
         return usage * unit_cost
     
@@ -212,20 +214,22 @@ class Model:
             unique_elements = list(set(keys))
             unique_elements = unique_elements.remove(None) if None in unique_elements else unique_elements
             choosen_uid = max(unique_elements, key=lambda x: keys.count(x)) if unique_elements else None
-            best_producer = best_producers[keys.index(choosen_uid)]
 
             if choosen_uid:
-                # require slots electricity, success depends on avaliable capacity
                 choosen_cache = producer_cache[choosen_uid]
-                status = choosen_cache.produce_electricity(total_usage)
+                producer_trust_levels = []
 
-                # #TODO: define some criteria on update trust level
                 for consumer in curr_consumers:
-                    consumer.update_trust_level(choosen_uid, positive="Success" in status)
+                    # require slots electricity, success depends on avaliable capacity
+                    status = choosen_cache.produce_electricity(consumer.usage)
+                    # update trust levels in each consumer based on received energy success
+                    curr_tl = consumer.update_trust_level(choosen_uid, positive="Success" in status)
+                    producer_trust_levels.append(curr_tl)
 
-                space_fmt = " "*(20 - len(choosen_cache.name))
-                print(f"[{status}] Choosen Producer: {choosen_cache.name}{space_fmt}| Capacity: {choosen_cache.capacity}", end=" - ")
-                print(f"Local Trust Level {best_producer.trust_level}")
+                    space_fmt = " "*(20 - len(choosen_cache.name))
+                    print(f"[{status}] Choosen Producer: {choosen_cache.name}{space_fmt}| Capacity: {choosen_cache.capacity}")
+                
+                print(f"Local Trust Levels {producer_trust_levels}")
 
     def start(self):
         self.runner.execute()
