@@ -12,3 +12,4 @@ consumers_data: [
   {"id": 22, "name": "Mary", "budget": 100000, "usage": 500},
   {"id": 33, "name": "João", "budget": 100000, "usage": 800},
 ]
+csv_header: ["tick","status","producer_name","old_capacity", "new_capacity","local_trust_level","consumer_uid","producer_uid", "usage", "budget", "unit_cost"]

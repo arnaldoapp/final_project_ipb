@@ -29,12 +29,10 @@ class ConsumerAgent(core.Agent):
 
         return curr_producer.trust_level
     
-    def make_decision(self, producers=[], total_budget=0, total_usage=0):
+    def make_decision(self, producers=[]):
         """
             Choose "Producer" based on price (unit_cost) and trust.
         """
-        total_usage = total_usage if total_usage else self.usage
-        total_budget = total_budget if total_budget else self.budget
         producer_scores = {}
         best_producer = None
         
@@ -53,14 +51,11 @@ class ConsumerAgent(core.Agent):
 
         # Execute Decision
         for prod in self.producers.values():
+            cost = prod.unit_cost * self.usage # calculate cost
             # Adjust decision based on trust level
-            if prod.trust_level >= 0.5:
-                cost = prod.unit_cost * total_usage # calculate cost
+            if prod.trust_level >= 0.5 and cost <= self.budget:
                 # If trust level is high or medium, make decision as usual
-                if cost <= total_budget and total_usage <= prod.capacity:
-                    producer_scores[prod.uid] = prod.get_score()
-                else:
-                    """Reduce Usage""" 
+                producer_scores[prod.uid] = prod.get_score()
             else:
                 # If trust level is low, reduce usage regardless of cost
                 """Reduce Usage"""

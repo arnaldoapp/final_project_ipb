@@ -1,3 +1,4 @@
+from utils.csv import *
 from utils.handle_agent import *
 from utils.handle_agent.restore import *
 from src.model.producer import ProducerAgent
@@ -37,19 +38,13 @@ class Model:
 
     def step(self):
         best_producers, curr_consumers = [], []
-        total_usage, total_budget = 0, 0
         choosen_uid = None
 
         self.context.synchronize(restore_producer)
 
         for agent in self.context.agents():
             if agent.type == 0:
-                total_budget += agent.budget
-                total_usage += agent.usage
-
-        for agent in self.context.agents():
-            if agent.type == 0:
-                producer, consumer = agent.make_decision(producer_cache, total_budget, total_usage)
+                producer, consumer = agent.make_decision(producer_cache)
                 best_producers.append(producer)
                 curr_consumers.append(consumer)
 
@@ -61,17 +56,28 @@ class Model:
 
         if choosen_uid:
             choosen_cache = producer_cache[choosen_uid]
+            curr_tick = self.runner.schedule.tick
 
-            print(f"\n######## {self.runner.schedule.tick}º Agreement ########", end="\n")
             for consumer in curr_consumers:
+                old_capacity = choosen_cache.capacity
                 # require slots electricity, success depends on avaliable capacity
                 status = choosen_cache.produce_electricity(consumer.usage)
                 # update trust levels in each consumer based on received energy success
                 curr_tl = consumer.update_trust_level(choosen_uid, positive="Success" in status)
-
-                space_fmt = " "*(20 - len(choosen_cache.name))
-                print(f"[{status}] Choosen Producer: {choosen_cache.name}{space_fmt}| Capacity: {choosen_cache.capacity}", end=" - ")
-                print(f"Local Trust Level {curr_tl}") 
+ 
+                write_agreement("result.csv", [curr_tick,
+                                               status, 
+                                               choosen_cache.name,
+                                               old_capacity, 
+                                               choosen_cache.capacity, 
+                                               curr_tl,
+                                               consumer.uid,
+                                               choosen_cache.uid,
+                                               consumer.usage,
+                                               consumer.budget,
+                                               choosen_cache.unit_cost
+                                            ])
+                
 
     def start(self):
         self.runner.execute()
@@ -86,6 +92,8 @@ def run():
     parser = parameters.create_args_parser()
     args = parser.parse_args()
     params = parameters.init_params(args.parameters_file, args.parameters)
+
+    initialize_csv("result.csv", params['csv_header'])
 
     # Run Model
     # ---
