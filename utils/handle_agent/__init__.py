@@ -16,3 +16,8 @@ def add_agents(model, agents_data, rank, agent_class, *args):
         
         model.context.add(agent)
         model.grid.move(agent, pt)
+
+def compare_scores(local_best_producer, chosen):
+    score_diff = local_best_producer.get_score() - chosen.get_score()
+
+    return score_diff < -4, score_diff

@@ -11,6 +11,7 @@ class ConsumerAgent(core.Agent):
         self.name = name
         self.budget = budget
         self.usage = initial_usage
+        self.trust_level = 0.5
         self.producers = {}
 
     def save(self) -> Tuple:

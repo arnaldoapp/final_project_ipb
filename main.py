@@ -37,45 +37,57 @@ class Model:
             add_agents(self, producers, rank, ProducerAgent, "name", "unit_cost", "initial_capacity")
 
     def step(self):
-        best_producers, curr_consumers = [], []
-        choosen_uid = None
+        best_producers, curr_consumers = {}, []
+        chosen_uid = None
 
         self.context.synchronize(restore_producer)
 
         for agent in self.context.agents():
             if agent.type == 0:
                 producer, consumer = agent.make_decision(producer_cache)
-                best_producers.append(producer)
+                best_producers[consumer.uid] = producer
                 curr_consumers.append(consumer)
 
         if best_producers:
-            keys = list(best.uid if best else None for best in best_producers)
+            keys = list(best.uid if best else None for best in best_producers.values())
             unique_elements = list(set(keys))
             unique_elements = unique_elements.remove(None) if None in unique_elements else unique_elements
-            choosen_uid = max(unique_elements, key=lambda x: keys.count(x)) if unique_elements else None
+            chosen_uid = max(unique_elements, key=lambda x: keys.count(x)) if unique_elements else None
 
-        if choosen_uid:
-            choosen_cache = producer_cache[choosen_uid]
+        if chosen_uid:
             curr_tick = self.runner.schedule.tick
 
             for consumer in curr_consumers:
-                old_capacity = choosen_cache.capacity
+                chosen_producer = producer_cache[chosen_uid]
+                local_best_producer = best_producers[consumer.uid]
+
+                # check if the local choice is significantly better than the collective choice
+                isSelfish, score_diff = compare_scores(local_best_producer, chosen_producer)
+                if(isSelfish):
+                    chosen_producer = local_best_producer                    
+                    consumer.trust_level = max(consumer.trust_level*(1 - chosen_producer.beta), 0)
+                else:                   
+                    consumer.trust_level = min(consumer.trust_level*(1 + chosen_producer.alpha), 1)
+                
+                old_capacity = chosen_producer.capacity
                 # require slots electricity, success depends on avaliable capacity
-                status = choosen_cache.produce_electricity(consumer.usage)
+                status = chosen_producer.produce_electricity(consumer.usage)
                 # update trust levels in each consumer based on received energy success
-                curr_tl = consumer.update_trust_level(choosen_uid, positive="Success" in status)
+                curr_tl = consumer.update_trust_level(chosen_producer.uid, positive="Success" in status)
  
                 write_agreement("result.csv", [curr_tick,
                                                status, 
-                                               choosen_cache.name,
+                                               chosen_producer.name,
                                                old_capacity, 
-                                               choosen_cache.capacity, 
+                                               chosen_producer.capacity, 
                                                curr_tl,
                                                consumer.uid,
-                                               choosen_cache.uid,
+                                               chosen_producer.uid,
                                                consumer.usage,
                                                consumer.budget,
-                                               choosen_cache.unit_cost
+                                               chosen_producer.unit_cost,
+                                               consumer.trust_level,
+                                               score_diff,
                                             ])
                 
 
