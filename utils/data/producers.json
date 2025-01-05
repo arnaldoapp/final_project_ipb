@@ -1,0 +1,12 @@
+[
+    {"id": 111, "name": "Eólica", "initial_trust_level": 0.5, "initial_capacity": 12000, "unit_cost": 12, "energy_type": 1, "failure_prob": 0.2},
+    {"id": 222, "name": "Solar", "initial_trust_level": 0.5, "initial_capacity": 6000, "unit_cost": 6, "energy_type": 2, "failure_prob": 0.15},
+    {"id": 333, "name": "Hidroelétrica", "initial_trust_level": 0.5, "initial_capacity": 4600, "unit_cost": 17, "energy_type": 3, "failure_prob": 0.1},
+    {"id": 444, "name": "Térmica", "initial_trust_level": 0.5, "initial_capacity": 8000, "unit_cost": 20, "energy_type": 4, "failure_prob": 0.25},
+    {"id": 555, "name": "Biomassa", "initial_trust_level": 0.5, "initial_capacity": 5000, "unit_cost": 14, "energy_type": 5, "failure_prob": 0.18},
+    {"id": 666, "name": "Nuclear", "initial_trust_level": 0.5, "initial_capacity": 10000, "unit_cost": 25, "energy_type": 6, "failure_prob": 0.05},
+    {"id": 777, "name": "Geotérmica", "initial_trust_level": 0.5, "initial_capacity": 7000, "unit_cost": 10, "energy_type": 7, "failure_prob": 0.22},
+    {"id": 888, "name": "Marés", "initial_trust_level": 0.5, "initial_capacity": 5500, "unit_cost": 13, "energy_type": 8, "failure_prob": 0.2},
+    {"id": 999, "name": "Carvão", "initial_trust_level": 0.5, "initial_capacity": 15000, "unit_cost": 30, "energy_type": 9, "failure_prob": 0.3},
+    {"id": 1010, "name": "Hidrogênio", "initial_trust_level": 0.5, "initial_capacity": 9000, "unit_cost": 22, "energy_type": 10, "failure_prob": 0.12}
+]

@@ -1,4 +1,5 @@
 from utils.csv import *
+from utils.json import *
 from utils.handle_agent import *
 from utils.handle_agent.restore import *
 from src.model.producer import ProducerAgent
@@ -30,10 +31,10 @@ class Model:
         rank = comm.Get_rank()
         
         if rank == 0:
-            consumers = params['consumers_data']
+            consumers = read_json_file('utils/data/consumers.json')
             add_agents(self, consumers, rank, ConsumerAgent, "name", "budget", "usage")
         elif rank == 1:
-            producers = params['producers_data']
+            producers = read_json_file('utils/data/producers.json')
             add_agents(self, producers, rank, ProducerAgent, "name", "unit_cost", "initial_capacity")
 
     def step(self):
@@ -89,7 +90,7 @@ class Model:
                                                consumer.trust_level,
                                                score_diff,
                                             ])
-                
+
 
     def start(self):
         self.runner.execute()

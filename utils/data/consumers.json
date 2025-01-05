@@ -1,0 +1,12 @@
+[
+    {"id": 11, "name": "Arnaldo", "budget": 90000, "usage": 1000},
+    {"id": 22, "name": "Mary", "budget": 100000, "usage": 500},
+    {"id": 33, "name": "João", "budget": 100000, "usage": 800},
+    {"id": 44, "name": "Paula", "budget": 120000, "usage": 700},
+    {"id": 55, "name": "Carlos", "budget": 85000, "usage": 600},
+    {"id": 66, "name": "Ana", "budget": 95000, "usage": 400},
+    {"id": 77, "name": "Bruno", "budget": 110000, "usage": 900},
+    {"id": 88, "name": "Fernanda", "budget": 105000, "usage": 750},
+    {"id": 99, "name": "Sofia", "budget": 98000, "usage": 550},
+    {"id": 100, "name": "Ricardo", "budget": 89000, "usage": 650}
+]
